@@ -47,6 +47,7 @@ def train_lda(features, labels):
     model = pipeline.fit(features, labels)
     with open('../model_weights.pkl', 'wb') as f:
         pickle.dump(model, f)
+        
     print(f"Cross-validated accuracy: {np.mean(scores):.4f} ± {np.std(scores):.4f}")
     print(f"Individual fold accuracies: {scores}")
 
