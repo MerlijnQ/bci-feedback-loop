@@ -7,7 +7,10 @@ import pandas as pd
 
 import pickle
 from src.utils.bandpower import BandPower
-CHANNEL_IDX = [1, 3]
+from scipy.signal import lfilter
+from scipy.signal import butter
+
+CHANNEL_IDX = [1, 3] 
 
 
 def load_epochs(file_path):
@@ -15,17 +18,19 @@ def load_epochs(file_path):
         epochs, labels = pickle.load(f)
     return epochs, labels
 
-def epoch_to_features(epochs, fs=250, band=(8, 32)):
+def epoch_to_features(epochs, fs=250, band=[8, 30]):
     """
     Convert epochs to features using band power extraction.
     Now uses filfilt as we construct the LDA offline. Needs
     to be change for quasi-causal or lfilter when deployed online.
     """
-    PSD_extractor = BandPower(fs=fs, band=band)
+    b, a =  butter(4, band, fs = fs, btype= 'band')
     features = []
     for epoch in epochs:
         epoch = epoch[:, CHANNEL_IDX] #assuming epoch shape is (samples, channels)
-        psd = PSD_extractor.compute(epoch)
+        filtered_epoch = lfilter(b, a, epoch)
+        psd = np.square(filtered_epoch)
+        psd = psd.mean(axis = 0)
         feat = np.log10(psd)  # Log-transform the PSD values
         features.append(feat)
 
@@ -44,21 +49,25 @@ def train_lda(features, labels):
 
     scores = cross_val_score(pipeline, features, labels, cv=cv, scoring='balanced_accuracy', error_score='raise')
     # cross_val_score only returns the scores, not the fitted model. We have to fit it to save it.
-    model = pipeline.fit(features, labels)
-    with open('../model_weights.pkl', 'wb') as f:
-        pickle.dump(model, f)
+    pipeline.fit(features, labels)
         
     print(f"Cross-validated accuracy: {np.mean(scores):.4f} ± {np.std(scores):.4f}")
     print(f"Individual fold accuracies: {scores}")
 
-epochs, labels = load_epochs("src/epochs.pkl")
+    return pipeline
+
+epochs, labels = load_epochs("src/utils/epochs.pkl")
 features = epoch_to_features(epochs)
+print(features.shape)
 
 features_left = features[labels == 'IMAGERY_LEFT']
+print(len(features_left))
 features_right = features[labels == 'IMAGERY_RIGHT']
 
 data_left = pd.DataFrame(features_left)
 data_left.to_csv("recorded_features_left.csv", index=False, header=False)
 data_right = pd.DataFrame(features_right)
 data_right.to_csv("recorded_features_right.csv", index=False, header=False)
-train_lda(features, labels)
+pipeline = train_lda(features, labels)
+with open('model_weights.pkl', 'wb') as f:
+        pickle.dump(pipeline, f)
