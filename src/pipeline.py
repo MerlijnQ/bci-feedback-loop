@@ -41,13 +41,6 @@ window = SlidingWindow(size=WINDOW_SIZE, step=FS // 10, channels= 8)
 feedback = VisualBar()
 controller = Controller(smoothing=0.05)
 
-# we want to take a window and:
-# 1. take 2 channels
-# 2. lfilter (because we need a causal filter)
-# 3. log10 
-# 4. feed it to the LDA
-
-
 b, a =  butter(4, BAND, fs = FS, btype= 'band')
 
 window.start_clock()
